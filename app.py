@@ -106,7 +106,7 @@ if not st.session_state.logged_in:
     if st.button("Login"):
         if login(username, password):
             st.success(f"✅ Welcome {st.session_state.username} ({st.session_state.role})")
-            st.experimental_rerun()
+            st.rerun()
         else:
             st.error("❌ Invalid username or password")
 
@@ -116,7 +116,7 @@ else:
     st.sidebar.write(f"👤 Logged in as: {st.session_state.username} ({st.session_state.role})")
     if st.sidebar.button("🚪 Logout"):
         logout()
-        st.experimental_rerun()
+        st.rerun()
 
     if st.session_state.role == "Faculty":
         st.title("📅 Faculty Timetable Submission")
