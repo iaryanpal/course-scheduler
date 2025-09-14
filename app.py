@@ -101,14 +101,40 @@ def generate_timetable(data):
 if not st.session_state.logged_in:
     st.title("🔐 Course Scheduler Login")
 
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
-    if st.button("Login"):
-        if login(username, password):
-            st.success(f"✅ Welcome {st.session_state.username} ({st.session_state.role})")
+    st.info("👉 Quick Demo: Click **Demo: Try as Faculty** to explore without credentials.")
+
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+
+    with col2:
+        if st.button("Login"):
+            if login(username, password):
+                st.success(f"✅ Welcome {st.session_state.username} ({st.session_state.role})")
+                st.rerun()
+            else:
+                st.error("❌ Invalid username or password")
+
+        # Demo button: auto log in as demo_faculty
+        if st.button("Demo: Try as Faculty"):
+            st.session_state.logged_in = True
+            st.session_state.username = "demo_faculty"
+            st.session_state.role = "Faculty"
+            st.success("✅ Logged in as demo_faculty (Faculty)")
             st.rerun()
-        else:
-            st.error("❌ Invalid username or password")
+
+    st.markdown("---")
+    st.subheader("🔍 Or view a read-only sample timetable")
+    if st.button("View Sample Timetable (read-only)"):
+        sample = pd.DataFrame({
+            "Course": ["CS101", "CS102", "CS103"],
+            "Faculty": ["Prof_A", "Prof_B", "Prof_A"],
+            "Slot": ["Mon_9", "Mon_10", "Tue_9"]
+        })
+        st.dataframe(sample)
+        st.info("This is a static sample. Use Demo login to try generating your own timetable.")
+
 
 else:
     # -------------------- DASHBOARD --------------------
