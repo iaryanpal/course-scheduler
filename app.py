@@ -72,10 +72,12 @@ def generate_timetable(data):
 
     cnf = CNF()
 
-    # Each course in at least one preferred slot
+    # Each course in at least one preferred slot (skip if empty)
     for c in courses:
-        preferred_vars = [var_map[(c, s)] for s in preferences[faculty_map[c]]]
+     if preferences[c]:
+        preferred_vars = [var_map[(c, s)] for s in preferences[c]]
         cnf.append(preferred_vars)
+
 
     # At most one slot per course
     for c in courses:
