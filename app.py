@@ -4,6 +4,7 @@ import pandas as pd
 from pysat.formula import CNF
 from pysat.solvers import Solver
 from io import BytesIO, StringIO
+import os
 
 # -------------------- APP CONFIG --------------------
 st.set_page_config(
@@ -14,11 +15,12 @@ st.set_page_config(
 )
 
 # -------------------- USER DATABASE --------------------
+# For demo: hardcoded users (replace with DB in production)
 USERS = {
     "faculty1": {"password": "pass123", "role": "Faculty"},
     "faculty2": {"password": "pass456", "role": "Faculty"},
     "admin": {"password": "admin123", "role": "Admin"},
-    "demo_faculty": {"password": "demo", "role": "Faculty"},
+    "demo_faculty": {"password": "demo", "role": "Faculty"}  # Demo account
 }
 
 # -------------------- SESSION STATE --------------------
@@ -59,7 +61,7 @@ def generate_timetable(data):
         preferences[course] = pref_list
         all_slots.update(pref_list)
 
-    # Ensure all courses have preferences
+    # Fallback for courses with no preferences
     for c in courses:
         if c not in preferences or not preferences[c]:
             preferences[c] = ["Unassigned"]
@@ -130,7 +132,7 @@ if not st.session_state.logged_in:
             else:
                 st.error("❌ Invalid username or password")
 
-        # Demo button
+        # Demo button: auto log in as demo_faculty
         if st.button("Demo: Try as Faculty"):
             st.session_state.logged_in = True
             st.session_state.username = "demo_faculty"
@@ -141,12 +143,14 @@ if not st.session_state.logged_in:
     st.markdown("---")
     st.subheader("🔍 Or view a read-only sample timetable")
     if st.button("View Sample Timetable (read-only)"):
+
         sample = pd.DataFrame({
             "Course": ["CS101", "CS102", "CS103"],
             "Faculty": ["Prof_A", "Prof_B", "Prof_A"],
             "Slot": ["Mon_9", "Mon_10", "Tue_9"]
         })
         st.dataframe(sample)
+        st.info("This is a static sample. Use Demo login to try generating your own timetable.")
 
 else:
     # -------------------- DASHBOARD --------------------
@@ -162,37 +166,40 @@ else:
 
         uploaded_file = st.file_uploader("Upload Faculty Preferences (CSV)", type=["csv"])
 
-        # Sample CSV
-        sample_csv = """Course,Faculty,PreferredSlots
-CS101,Prof_A,Mon_9,Tue_9
-CS102,Prof_B,Mon_10,Mon_9
-CS103,Prof_A,Mon_9,Tue_9
-CS104,Prof_C,Tue_10,Wed_9
-CS105,Prof_B,Wed_10,Fri_9
-"""
-        st.download_button(
-            label="⬇ Download Sample Preferences CSV",
-            data=sample_csv,
-            file_name="preferences.csv",
-            mime="text/csv"
-        )
-
         if uploaded_file:
-            try:
-                data = pd.read_csv(uploaded_file)
-                st.write("Uploaded Preferences Preview:", data)
-            except Exception as e:
-                st.error(f"Error reading CSV: {e}")
-                data = None
+            # Case 1: user uploaded a file → clean it
+            data = pd.read_csv(uploaded_file)
+            data["Course"] = data["Course"].astype(str).str.strip()
+            data["Faculty"] = data["Faculty"].astype(str).str.strip()
+            data["PreferredSlots"] = data["PreferredSlots"].astype(str).str.strip()
+            st.write("Uploaded Preferences Preview:", data)
         else:
-            st.info("No file uploaded. Using sample preferences for demo.")
-            data = pd.read_csv(StringIO(sample_csv),sep="\t")
-            st.write("Sample Preferences Preview:", data)
+            # Case 2: demo fallback → load repo CSV
+            st.info("No file uploaded. Using sample preferences.csv from repo.")
+            try:
+                repo_csv_path = os.path.join(os.path.dirname(__file__), "preferences.csv")
+                data = pd.read_csv(repo_csv_path)
+                data["Course"] = data["Course"].astype(str).str.strip()
+                data["Faculty"] = data["Faculty"].astype(str).str.strip()
+                data["PreferredSlots"] = data["PreferredSlots"].astype(str).str.strip()
+                st.write("Sample Preferences Preview:", data)
 
-        # Generate timetable
-        if st.button("Generate Timetable", type="primary"):
+                # Add download button (serve raw file bytes)
+                with open(repo_csv_path, "rb") as f:
+                    st.download_button(
+                        label="⬇ Download Sample Preferences CSV",
+                        data=f.read(),
+                        file_name="preferences.csv",
+                        mime="text/csv"
+                    )
+            except Exception as e:
+                st.error(f"⚠ Could not load demo CSV: {e}")
+                data = None
+
+        # Generate timetable button
+        if data is not None and st.button("Generate Timetable", type="primary"):
             timetable_df = generate_timetable(data)
-            if timetable_df is not None and not timetable_df.empty:
+            if timetable_df is not None:
                 st.success("✅ Timetable generated successfully!")
                 st.dataframe(timetable_df)
 
@@ -213,18 +220,16 @@ CS105,Prof_B,Wed_10,Fri_9
 
         uploaded_timetable = st.file_uploader("Upload Generated Timetable", type=["csv", "xlsx"])
         if uploaded_timetable:
-            try:
-                if uploaded_timetable.name.endswith(".csv"):
-                    timetable_df = pd.read_csv(uploaded_timetable)
-                else:
-                    timetable_df = pd.read_excel(uploaded_timetable)
-                st.write("📋 Timetable Preview:", timetable_df)
-            except Exception as e:
-                st.error(f"Error reading timetable: {e}")
-                timetable_df = None
+            if uploaded_timetable.name.endswith(".csv"):
+                timetable_df = pd.read_csv(uploaded_timetable)
+            else:
+                timetable_df = pd.read_excel(uploaded_timetable)
 
-        if st.button("✅ Approve Timetable"):
-            st.success("Timetable Approved and Finalized!")
+            st.write("📋 Timetable Preview:", timetable_df)
 
-        if st.button("🔄 Request Changes"):
-            st.warning("Request sent to faculty for updates.")
+            # Approval system
+            if st.button("✅ Approve Timetable", type="primary"):
+                st.success("Timetable Approved and Finalized!")
+
+            if st.button("🔄 Request Changes"):
+                st.warning("Request sent to faculty for updates.")
