@@ -165,7 +165,7 @@ else:
         # Sample CSV
         sample_csv = """Course,Faculty,PreferredSlots
 CS101,Prof_A,Mon_9,Tue_9
-CS102,Prof_B,Mon_10
+CS102,Prof_B,Mon_10,Mon_9
 CS103,Prof_A,Mon_9,Tue_9
 CS104,Prof_C,Tue_10,Wed_9
 CS105,Prof_B,Wed_10,Fri_9
@@ -186,7 +186,7 @@ CS105,Prof_B,Wed_10,Fri_9
                 data = None
         else:
             st.info("No file uploaded. Using sample preferences for demo.")
-            data = pd.read_csv(StringIO(sample_csv))
+            data = pd.read_csv(StringIO(sample_csv),sep="\t")
             st.write("Sample Preferences Preview:", data)
 
         # Generate timetable
