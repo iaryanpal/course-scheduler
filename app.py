@@ -146,29 +146,46 @@ else:
 
     if st.session_state.role == "Faculty":
         st.title("📅 Faculty Timetable Submission")
-        st.markdown("Upload your **course preferences** in CSV format and view the generated timetable.")
+        st.markdown("Upload your **course preferences** in CSV format or use the built-in demo dataset.")
 
         uploaded_file = st.file_uploader("Upload Faculty Preferences (CSV)", type=["csv"])
+
         if uploaded_file:
+            # Case 1: user uploaded a file
             data = pd.read_csv(uploaded_file)
             st.write("Uploaded Preferences Preview:", data)
+        else:
+            # Case 2: no file uploaded → use sample CSV
+            st.info("No file uploaded. Using sample preferences for demo.")
+            from io import StringIO
+            sample_csv = """Course,Faculty,PreferredSlots
+CS101,Prof_A,Mon_9,Tue_9
+CS102,Prof_B,Mon_10
+CS103,Prof_A,Mon_9,Tue_9
+CS104,Prof_C,Tue_10,Wed_9
+CS105,Prof_B,Wed_10,Fri_9
+"""
+            data = pd.read_csv(StringIO(sample_csv))
+            st.write("Sample Preferences Preview:", data)
 
-            if st.button("Generate Timetable", type="primary"):
-                timetable_df = generate_timetable(data)
-                if timetable_df is not None:
-                    st.success("✅ Timetable generated successfully!")
-                    st.dataframe(timetable_df)
+        # Generate timetable button (works for both uploaded and sample CSV)
+        if st.button("Generate Timetable", type="primary"):
+            timetable_df = generate_timetable(data)
+            if timetable_df is not None:
+                st.success("✅ Timetable generated successfully!")
+                st.dataframe(timetable_df)
 
-                    # Export options
-                    csv_export = timetable_df.to_csv(index=False).encode('utf-8')
-                    excel_buffer = BytesIO()
-                    timetable_df.to_excel(excel_buffer, index=False)
-                    excel_data = excel_buffer.getvalue()
+                # Export options
+                csv_export = timetable_df.to_csv(index=False).encode('utf-8')
+                excel_buffer = BytesIO()
+                timetable_df.to_excel(excel_buffer, index=False)
+                excel_data = excel_buffer.getvalue()
 
-                    st.download_button("⬇ Download CSV", csv_export, "timetable.csv", "text/csv")
-                    st.download_button("⬇ Download Excel", excel_data, "timetable.xlsx", "application/vnd.ms-excel")
-                else:
-                    st.error("❌ No valid timetable found for given constraints")
+                st.download_button("⬇ Download CSV", csv_export, "timetable.csv", "text/csv")
+                st.download_button("⬇ Download Excel", excel_data, "timetable.xlsx", "application/vnd.ms-excel")
+            else:
+                st.error("❌ No valid timetable found for given constraints")
+
 
     elif st.session_state.role == "Admin":
         st.title("🛠 Admin Timetable Management")
