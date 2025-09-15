@@ -49,9 +49,17 @@ def generate_timetable(data):
     all_slots = set()
 
     for _, row in data.iterrows():
-        pref_list = [s.strip() for s in row["PreferredSlots"].split(",")]
-        preferences[row["Faculty"]] = pref_list
-        all_slots.update(pref_list)
+        for _, row in data.iterrows():
+         raw_slots = str(row["PreferredSlots"]).strip() if pd.notna(row["PreferredSlots"]) else ""
+        if raw_slots:  # only split if not empty
+          pref_list = [s.strip() for s in raw_slots.split(",") if s.strip()]
+        else:
+          pref_list = []  # no preferences provided
+
+    preferences[row["Faculty"]] = pref_list
+    all_slots.update(pref_list)
+    preferences[row["Faculty"]] = pref_list
+    all_slots.update(pref_list)
     slots = sorted(list(all_slots))
 
     # Map (course, slot) -> SAT variable
