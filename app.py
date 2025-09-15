@@ -168,7 +168,7 @@ else:
             from io import StringIO
             sample_csv = """Course,Faculty,PreferredSlots
 CS101,Prof_A,Mon_9,Tue_9
-CS102,Prof_B,Mon_10
+CS102,Prof_B,Mon_10,Tue_9
 CS103,Prof_A,Mon_9,Tue_9
 CS104,Prof_C,Tue_10,Wed_9
 CS105,Prof_B,Wed_10,Fri_9
