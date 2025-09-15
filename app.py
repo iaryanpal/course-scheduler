@@ -3,7 +3,7 @@ import streamlit as st
 import pandas as pd
 from pysat.formula import CNF
 from pysat.solvers import Solver
-from io import BytesIO
+from io import BytesIO, StringIO
 
 # -------------------- APP CONFIG --------------------
 st.set_page_config(
@@ -14,11 +14,11 @@ st.set_page_config(
 )
 
 # -------------------- USER DATABASE --------------------
-# For demo: hardcoded users (replace with DB in production)
 USERS = {
     "faculty1": {"password": "pass123", "role": "Faculty"},
     "faculty2": {"password": "pass456", "role": "Faculty"},
-    "admin": {"password": "admin123", "role": "Admin"}
+    "admin": {"password": "admin123", "role": "Admin"},
+    "demo_faculty": {"password": "demo", "role": "Faculty"},
 }
 
 # -------------------- SESSION STATE --------------------
@@ -43,23 +43,28 @@ def logout():
 
 # -------------------- SAT Solver Logic --------------------
 def generate_timetable(data):
-    courses = data["Course"].tolist()
-    faculty_map = dict(zip(data["Course"], data["Faculty"]))
-    preferences = {}
+    courses = data["Course"].astype(str).tolist()
+    faculty_map = dict(zip(data["Course"].astype(str), data["Faculty"].astype(str)))
+    preferences = {}  # per-course preferences
     all_slots = set()
 
+    # Collect preferences per course
     for _, row in data.iterrows():
-        for _, row in data.iterrows():
-         raw_slots = str(row["PreferredSlots"]).strip() if pd.notna(row["PreferredSlots"]) else ""
-        if raw_slots:  # only split if not empty
-          pref_list = [s.strip() for s in raw_slots.split(",") if s.strip()]
+        course = str(row["Course"])
+        raw_slots = str(row["PreferredSlots"]).strip() if pd.notna(row["PreferredSlots"]) else ""
+        if raw_slots:
+            pref_list = [s.strip() for s in raw_slots.split(",") if s.strip()]
         else:
-          pref_list = []  # no preferences provided
+            pref_list = []
+        preferences[course] = pref_list
+        all_slots.update(pref_list)
 
-    preferences[row["Faculty"]] = pref_list
-    all_slots.update(pref_list)
-    preferences[row["Faculty"]] = pref_list
-    all_slots.update(pref_list)
+    # Ensure all courses have preferences
+    for c in courses:
+        if c not in preferences or not preferences[c]:
+            preferences[c] = ["Unassigned"]
+            all_slots.add("Unassigned")
+
     slots = sorted(list(all_slots))
 
     # Map (course, slot) -> SAT variable
@@ -72,13 +77,11 @@ def generate_timetable(data):
 
     cnf = CNF()
 
-    # Each course in at least one preferred slot (skip if empty)
+    # Each course in at least one preferred slot
     for c in courses:
-     if preferences[c]:
-        preferred_vars = [var_map[(c, s)] for s in preferences[c]]
-        if preferred_vars:
-          cnf.append(preferred_vars)
-
+        pref_vars = [var_map[(c, s)] for s in preferences[c] if (c, s) in var_map]
+        if pref_vars:
+            cnf.append(pref_vars)
 
     # At most one slot per course
     for c in courses:
@@ -127,7 +130,7 @@ if not st.session_state.logged_in:
             else:
                 st.error("❌ Invalid username or password")
 
-        # Demo button: auto log in as demo_faculty
+        # Demo button
         if st.button("Demo: Try as Faculty"):
             st.session_state.logged_in = True
             st.session_state.username = "demo_faculty"
@@ -144,8 +147,6 @@ if not st.session_state.logged_in:
             "Slot": ["Mon_9", "Mon_10", "Tue_9"]
         })
         st.dataframe(sample)
-        st.info("This is a static sample. Use Demo login to try generating your own timetable.")
-
 
 else:
     # -------------------- DASHBOARD --------------------
@@ -161,35 +162,44 @@ else:
 
         uploaded_file = st.file_uploader("Upload Faculty Preferences (CSV)", type=["csv"])
 
-        if uploaded_file:
-            # Case 1: user uploaded a file
-            data = pd.read_csv(uploaded_file)
-            st.write("Uploaded Preferences Preview:", data)
-        else:
-            # Case 2: no file uploaded → use sample CSV
-            st.info("No file uploaded. Using sample preferences for demo.")
-            from io import StringIO
-            sample_csv = """Course,Faculty,PreferredSlots
+        # Sample CSV
+        sample_csv = """Course,Faculty,PreferredSlots
 CS101,Prof_A,Mon_9,Tue_9
-CS102,Prof_B,Mon_10,Tue_9
+CS102,Prof_B,Mon_10
 CS103,Prof_A,Mon_9,Tue_9
 CS104,Prof_C,Tue_10,Wed_9
 CS105,Prof_B,Wed_10,Fri_9
 """
+        st.download_button(
+            label="⬇ Download Sample Preferences CSV",
+            data=sample_csv,
+            file_name="preferences.csv",
+            mime="text/csv"
+        )
+
+        if uploaded_file:
+            try:
+                data = pd.read_csv(uploaded_file)
+                st.write("Uploaded Preferences Preview:", data)
+            except Exception as e:
+                st.error(f"Error reading CSV: {e}")
+                data = None
+        else:
+            st.info("No file uploaded. Using sample preferences for demo.")
             data = pd.read_csv(StringIO(sample_csv))
             st.write("Sample Preferences Preview:", data)
 
-        # Generate timetable button (works for both uploaded and sample CSV)
+        # Generate timetable
         if st.button("Generate Timetable", type="primary"):
             timetable_df = generate_timetable(data)
-            if timetable_df is not None:
+            if timetable_df is not None and not timetable_df.empty:
                 st.success("✅ Timetable generated successfully!")
                 st.dataframe(timetable_df)
 
                 # Export options
                 csv_export = timetable_df.to_csv(index=False).encode('utf-8')
                 excel_buffer = BytesIO()
-                timetable_df.to_excel(excel_buffer, index=False)
+                timetable_df.to_excel(excel_buffer, index=False, engine="openpyxl")
                 excel_data = excel_buffer.getvalue()
 
                 st.download_button("⬇ Download CSV", csv_export, "timetable.csv", "text/csv")
@@ -197,23 +207,24 @@ CS105,Prof_B,Wed_10,Fri_9
             else:
                 st.error("❌ No valid timetable found for given constraints")
 
-
     elif st.session_state.role == "Admin":
         st.title("🛠 Admin Timetable Management")
         st.markdown("Department head can **review and approve** generated timetables here.")
 
         uploaded_timetable = st.file_uploader("Upload Generated Timetable", type=["csv", "xlsx"])
         if uploaded_timetable:
-            if uploaded_timetable.name.endswith(".csv"):
-                timetable_df = pd.read_csv(uploaded_timetable)
-            else:
-                timetable_df = pd.read_excel(uploaded_timetable)
+            try:
+                if uploaded_timetable.name.endswith(".csv"):
+                    timetable_df = pd.read_csv(uploaded_timetable)
+                else:
+                    timetable_df = pd.read_excel(uploaded_timetable)
+                st.write("📋 Timetable Preview:", timetable_df)
+            except Exception as e:
+                st.error(f"Error reading timetable: {e}")
+                timetable_df = None
 
-            st.write("📋 Timetable Preview:", timetable_df)
+        if st.button("✅ Approve Timetable"):
+            st.success("Timetable Approved and Finalized!")
 
-            # Approval system
-            if st.button("✅ Approve Timetable", type="primary"):
-                st.success("Timetable Approved and Finalized!")
-
-            if st.button("🔄 Request Changes"):
-                st.warning("Request sent to faculty for updates.")
+        if st.button("🔄 Request Changes"):
+            st.warning("Request sent to faculty for updates.")
