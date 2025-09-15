@@ -76,7 +76,8 @@ def generate_timetable(data):
     for c in courses:
      if preferences[c]:
         preferred_vars = [var_map[(c, s)] for s in preferences[c]]
-        cnf.append(preferred_vars)
+        if preferred_vars:
+          cnf.append(preferred_vars)
 
 
     # At most one slot per course
